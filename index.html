@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Front_end</title>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js">
+    </script>
+    <script src="thrift_files/gen-js/batch_types.js" type="text/javascript"></script>
+    <script src="thrift_files/gen-js/ParseRequest.js" type="text/javascript"></script>
+    <script src="thrift_files/thrift.js" type="text/javascript"></script>
+
+    <script>
+        json_api = 'http://localhost:5000/api/v1/batches';
+        binary_api = 'http://localhost:5000/api/v2/batches';
+
+        $(document).ready(function () {
+            $("#submit_button").click(function (message) {
+                let batch_id = $("#Batch_ID").val();
+                let batch_unit = $("#Batch_Unit").val();
+                let batch_size = $("#Batch_Size").val();
+                let benchmark_type = $("#Benchmark_Type option:selected").val();
+                let dataset_type = $("#Dataset_Type option:selected").val();
+                var cpu, net_in, net_out, mem, final;
+                if ($("#CPUUtilization_Average").is(':checked') === true) {
+                    cpu = 'CPUUtilization_Average';
+                }
+                if ($("#NetworkIn_Average").is(':checked')) {
+                    net_in = 'NetworkIn_Average';
+                }
+                if ($("#NetworkOut_Average").is(':checked')) {
+                    net_out = 'NetworkOut_Average';
+                }
+                if ($("#MemoryUtilization_Average").is(':checked')) {
+                    mem = 'MemoryUtilization_Average';
+                }
+                if ($("#Final_Target").is(':checked')) {
+                    final = 'Final_Target';
+                }
+                let serialization_type = $("#Serialization_Type option:selected").val();
+                let request_data = {
+                    'RFWID': (new Date().getTime()) + Math.random().toString(26).substr(2),
+                    'batch_id': batch_id,
+                    'batch_unit': batch_unit,
+                    'batch_size': batch_size,
+                    'benchmark_type': benchmark_type,
+                    'dataset_type': dataset_type,
+                    'cpu': cpu,
+                    'net_in': net_in,
+                    'net_out': net_out,
+                    'mem': mem,
+                    'final': final
+                };
+
+                if (serialization_type === 'json') {
+                    $.ajax({
+                            type: "POST",
+                            url: json_api,
+                            data: JSON.stringify(request_data),
+                            success: function (result) {
+                                $('#rfwid').text("RFW ID is: " + JSON.stringify(result['RFWID']) +
+                                    '， last batch id is: ' + result['last_batch_id']);
+                                $('#notification').text('❗️Following are total ' + batch_size +
+                                    ' batch(es), batch id starts for ' + batch_id + ' to ' + (parseInt(batch_id) + parseInt(batch_size) - 1) +
+                                    ', single batch contains ' + batch_unit + ' samples：👇');
+                                $('#content').css("white-space", "pre");
+                                let jsons = JSON.stringify(result['batches']);
+                                jsons = JSON.parse(jsons);
+                                let output = '';
+                                $.each(jsons, function (key, value) {
+                                    output += 'Batch' + key + '\n';
+                                    $.each(value, function (k, single_value) {
+                                        output += JSON.stringify(single_value) + '\n';
+                                    })
+                                });
+                                $('#content').text(output);
+                            },
+                            error: function (e) {
+                                alert('error');
+                            }
+                        }
+                    );
+                } else {
+                    var transport = new Thrift.TXHRTransport(binary_api);
+                    var protocol = new Thrift.TJSONProtocol(transport);
+                    var client = new ParseRequestClient(protocol);
+                    var req = new ClientRequest();
+                    req.RFWID = request_data.RFWID;
+                    req.batch_id = request_data.batch_id;
+                    req.batch_unit = request_data.batch_unit;
+                    req.batch_size = request_data.batch_size;
+                    req.benchmark_type = request_data.benchmark_type;
+                    req.dataset_type = request_data.dataset_type;
+                    req.cpu = request_data.cpu;
+                    req.net_in = request_data.net_in;
+                    req.net_out = request_data.net_out;
+                    req.mem = request_data.mem;
+                    req.final = request_data.final;
+                    let res = client.parse_request(req);
+                    $('#rfwid').text("RFW ID is: " + res.RFWID + '， last batch id is: ' + res.last_batch_id);
+                    $('#notification').text('❗️Following are total ' + req.batch_size +
+                        ' batch(es), batch id starts for ' + req.batch_id + ' to ' + res.last_batch_id +
+                        ', single batch contains ' + req.batch_unit + ' samples：👇');
+                    let output = '';
+                    for (let i = 0; i < res.batches.length; i++) {
+                        let test = res.batches[i];
+                        output += 'Batch' + i + '\n';
+                        for (let j = 0; j < test.units.length; j++) {
+                            let unit = test.units[j];
+                            if (unit.CPUUtilization_Average !== null) {
+                                output += '　CPUUtilization_Average: ' + unit.CPUUtilization_Average;
+                            }
+                            if (unit.NetworkIn_Average !== null) {
+                                output += '　NetworkIn_Average: ' + unit.NetworkIn_Average;
+                            }
+                            if (unit.NetworkOut_Average !== null) {
+                                output += '　NetworkOut_Average: ' + unit.NetworkOut_Average;
+                            }
+                            if (unit.MemoryUtilization_Average !== null) {
+                                output += '　MemoryUtilization_Average: ' + unit.MemoryUtilization_Average;
+                            }
+                            if (unit.Final_Target !== null) {
+                                output += '　Final_Target:' + unit.Final_Target;
+                            }
+                            output += '\n';
+                        }
+                        output += '\n';
+                    }
+                    $('#content').css("white-space", "pre");
+                    $('#content').text(output);
+                }
+            });
+        });
+
+    </script>
+</head>
+
+<body>
+<br>
+<center><h1>Get Batches as You Want</h1></center>
+
+<br><br>
+
+<div>
+    <div class="container">
+        <h3>Please fill the following form:</h3>
+        <form action="#" id="adv-search-form" class="clearfix">
+            <fieldset>
+                Batch ID:　　<input type="text" id="Batch_ID" placeholder="int, like 1" size="30" value="0">(start from 0)<br>
+                Batch Unit:　<input type="text" id="Batch_Unit" placeholder="size of single batch" size="30"
+                                   value="1"><br>
+                Batch Size:　<input type="text" id="Batch_Size" placeholder="num of batches you want" size="30"
+                                   value="1"><br>
+                Benchmark Type:　
+                <select id="Benchmark_Type">
+                    <option value="dell">Dell</option>
+                    <option value="netflix">Netflix</option>
+                </select><br>
+                Dataset Type:　　
+                <select id="Dataset_Type">
+                    <option value="test">Test</option>
+                    <option value="train">Train</option>
+                </select><br>
+                Workload Metric:<br>
+                　　　　　　　　CPUUtilization_Average: <input type="checkbox" id="CPUUtilization_Average"
+                                                       checked="checked"><br>
+                　　　　　　　　NetworkIn_Average: <input type="checkbox" id="NetworkIn_Average" checked="checked"><br>
+                　　　　　　　　NetworkOut_Average: <input type="checkbox" id="NetworkOut_Average" checked="checked"><br>
+                　　　　　　　　MemoryUtilization_Average: <input type="checkbox" id="MemoryUtilization_Average"
+                                                          checked="checked"><br>
+                　　　　　　　　Final_Target: <input type="checkbox" id="Final_Target" checked="checked">
+                <br>
+                Serialization Type:
+                <select id="Serialization_Type">
+                    <option value="json">json</option>
+                    <option value="binary">binary</option>
+                </select>
+            </fieldset>
+            <br>
+            <button id="submit_button">Submit button</button>
+        </form>
+    </div>
+
+    <p id="rfwid"></p>
+    <p id="notification"></p>
+    <p id="content"></p>
+
+</div>
+
+
+</body>
+</html>
